@@ -1,8 +1,5 @@
 # Enhancing Breast Cancer Diagnosis and Treatment with Machine Learning
 
-
-This repository contains my work on applying machine learning algorithms to improve breast cancer diagnosis and treatment. I used several powerful algorithms, including K-means clustering, random forests, and decision trees, to identify key patterns in breast cancer data.
-
 Dataset Overview
 **Wisconsin Diagnostic Breast Cancer (WDBC) Dataset (Al Aswad, 2023)**: The dataset includes 569 samples of breast tissue with 32 features describing cell characteristics and biopsy images. Each sample is classified as either benign (non-cancerous) or malignant (cancerous).
 
