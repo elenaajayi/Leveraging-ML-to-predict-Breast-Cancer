@@ -1,0 +1,585 @@
+---
+title: "Final Project"
+output:
+  pdf_document: default
+  word_document: default
+date: "2023-12-20"
+---
+
+```{r setup, include=FALSE}
+# Set CRAN mirror
+options(repos = c(CRAN = "https://cran.r-project.org"))
+```
+
+
+
+```{r pressure, echo=FALSE}
+# Load and Read the Breast Cancer Dataset
+file_path <- file.path("~/Desktop/R_Working_Directory/Datasets", "breast_cancer_master.csv")
+print(file_path)  # Add this line to print the file path
+breast_cancer_data <- read.csv(file_path, header = TRUE)
+```
+
+
+
+
+```{r}
+getwd()
+
+```
+
+
+
+```{r}
+file_path <- file.path("~", "Desktop", "R_Working_Directory", "Datasets", "breast_cancer_master.csv")
+
+```
+
+## R Markdown
+##This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+## When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+```{r}
+#Install Packages
+install.packages("flexclust")
+install.packages("fpc")
+install.packages("party")
+install.packages("partykit")
+```
+
+```{r}
+# Load base R stats functions
+library(stats) # Fundamental statistics
+
+# Load tidyverse for data manipulation and plotting
+library(tidyverse) # Tidy data and plotting
+
+# Load cluster for clustering algorithms
+library(cluster) # Hierarchical and k-means clustering
+
+# Load ggplot2 for flexible data visualization
+library(ggplot2) # Grammar of Graphics plotting
+
+# Load flexclust for model-based clustering
+library(flexclust) # Flexible model-based clustering
+
+# Load fpc for cluster validation
+library(fpc) # Flexible Procedures for Clustering
+
+library(dplyr)
+
+library(caret)
+
+library(partykit)
+
+library(randomForest)
+
+```
+
+```{r}
+names(breast_cancer_data)
+```
+
+```{r}
+# Handle missing data for "Mean"
+breast_cancer_data %>% 
+  mutate(
+    radius_mean = replace_na(radius_mean, median(radius_mean)),
+    texture_mean = replace_na(texture_mean, median(texture_mean)),
+    perimeter_mean = replace_na(perimeter_mean, median(perimeter_mean)),
+    area_mean = replace_na(area_mean, median(area_mean)),
+    concavity_mean = replace_na(concavity_mean, median(concavity_mean)),
+    concave_points_mean = replace_na(concave_points_mean, median(concave_points_mean)),
+    symmetry_mean = replace_na(symmetry_mean, median(symmetry_mean)),
+    fractal_dimension_mean = replace_na(fractal_dimension_mean, median(fractal_dimension_mean)),
+  )
+
+# Add replacements for "SE"
+breast_cancer_data <- breast_cancer_data %>% 
+  mutate(
+    radius_se = replace_na(radius_se, median(radius_se)),
+    texture_se = replace_na(texture_se, median(texture_se)),
+    perimeter_se = replace_na(perimeter_se, median(perimeter_se)),
+    area_se = replace_na(area_se, median(area_se)),
+    concavity_se = replace_na(concavity_se, median(concavity_se)),
+    concave_points_se = replace_na(concave_points_se, median(concave_points_se)),
+    symmetry_se = replace_na(symmetry_se, median(symmetry_se)),
+    fractal_dimension_se = replace_na(fractal_dimension_se, median(fractal_dimension_se)) 
+  )
+
+
+#Add replacements to "Worst"
+breast_cancer_data %>% 
+  mutate(
+    radius_worst = replace_na(radius_worst, median(radius_worst)),
+    texture_worst = replace_na(texture_worst, median(texture_worst)),
+    perimeter_worst = replace_na(perimeter_worst, median(perimeter_worst)),
+    area_worst = replace_na(area_worst, median(area_worst)),
+    concavity_worst = replace_na(concavity_worst, median(concavity_worst)),
+    concave_points_worst = replace_na(concave_points_worst, median(concave_points_worst)),
+    symmetry_worst = replace_na(symmetry_worst, median(symmetry_worst)),
+    fractal_dimension_worst = replace_na(fractal_dimension_worst, median(fractal_dimension_worst)),
+  )
+
+
+
+```
+
+```{r}
+# Handle missing data for all columns
+breast_cancer_data <- breast_cancer_data %>%
+  mutate(
+    across(everything(), ~ replace_na(., median(.)))
+  )
+
+```
+
+```{r}
+#Drop non-relevant features
+drop_non_relevant <- breast_cancer_data %>%
+  select(-c(id))
+```
+
+```{r}
+#Choose features for normalization:
+mean_features <- c(
+  "radius_mean",
+  "texture_mean",
+  "perimeter_mean",
+  "area_mean",
+  "concavity_mean",
+  "concave_points_mean",
+  "symmetry_mean",
+  "fractal_dimension_mean"
+)
+se_features <- c(
+  "radius_se",
+  "texture_se",
+  "perimeter_se",
+  "area_se",
+  "concavity_se",
+  "concave_points_se",
+  "symmetry_se",
+  "fractal_dimension_se"
+)
+
+worst_features <- c(
+  "radius_worst",
+  "texture_worst",
+  "perimeter_worst",
+  "area_worst",
+  "concavity_worst",
+  "concave_points_worst",
+  "symmetry_worst",
+  "fractal_dimension_worst"
+)
+
+```
+
+```{r}
+# Define a function for min-max normalization for multiple feature lists
+features_lists <- list(mean_features, se_features, worst_features)
+
+minmax_normalize_all <- function(breast_cancer_data, features_lists) {
+  # Iterate over each feature list in features_lists
+  Map(function(features) {
+    # Apply min-max normalization to each feature in the list
+    mutate_each(breast_cancer_data,
+                ~ (x - min(x)) / (max(x) - min(x)),
+                .cols = features)
+  }, features_lists)
+  # Return the updated data frame with normalized features
+  return(breast_cancer_data)
+}
+
+#New Feature Creation:
+breast_cancer_data %>%
+  mutate(
+    # Ratios for radius, perimeter, and concavity
+    radius_ratio = radius_mean / radius_se,
+    perimeter_area_ratio = perimeter_mean / area_mean,
+    concavity_ratio = concavity_worst / concave_points_worst,
+    
+    # Ratios for texture
+    texture_mean_se_ratio = texture_mean / texture_se,
+    texture_worst_mean_ratio = texture_worst / texture_mean,
+    
+    # Ratios for symmetry
+    symmetry_mean_se_ratio = symmetry_mean / symmetry_se,
+    symmetry_worst_mean_ratio = symmetry_worst / symmetry_mean,
+    symmetry_asymmetry_ratio = (1 - symmetry_mean) / symmetry_mean,
+    
+    # Ratios for fractal dimension
+    fractal_dimension_mean_se_ratio = fractal_dimension_mean / fractal_dimension_se,
+    fractal_dimension_worst_mean_ratio = fractal_dimension_worst / fractal_dimension_mean,
+    fractal_dimension_complexity_difference = (fractal_dimension_mean - fractal_dimension_worst) / fractal_dimension_mean
+  )
+
+```
+
+```{r}
+# Create a new data frame for the new features
+breast_cancer_data_new_features <- breast_cancer_data %>%
+  mutate(
+    texture_mean_se_ratio = texture_mean / texture_se,
+    texture_worst_mean_ratio = texture_worst / texture_mean,
+    concavity_ratio = concavity_worst / concave_points_worst,
+    fractal_dimension_mean_se_ratio = fractal_dimension_mean / fractal_dimension_se,
+    fractal_dimension_worst_mean_ratio = fractal_dimension_worst / fractal_dimension_mean,
+    fractal_dimension_complexity_difference = (fractal_dimension_mean - fractal_dimension_worst) / fractal_dimension_mean,
+    symmetry_mean_se_ratio = symmetry_mean / symmetry_se,
+    symmetry_worst_mean_ratio = symmetry_worst / symmetry_mean,
+    symmetry_asymmetry_ratio = (1 - symmetry_mean) / symmetry_mean,
+    radius_ratio = radius_mean / radius_se,
+    perimeter_area_ratio = perimeter_mean / area_mean
+  )
+
+# Handle missing data for all columns in breast_cancer_data_new_features
+breast_cancer_data_new_features <- breast_cancer_data_new_features %>%
+  mutate(
+    across(everything(), ~ replace_na(., median(.)))
+  )
+
+
+# Combine the original data frame with the new features data frame
+breast_cancer_data_comb <- bind_cols(breast_cancer_data, breast_cancer_data_new_features)
+
+# Handle missing data for all columns in breast_cancer_data_comb
+breast_cancer_data_comb <- breast_cancer_data_comb %>%
+  mutate(
+    across(everything(), ~ replace_na(., median(.)))
+  )
+
+# Verify the changes
+head(breast_cancer_data_comb)
+
+# Function to handle infinite values in a data frame with lists
+handle_infinite_values <- function(df, replacement_value = 1e6) {
+  # Identify columns with lists
+  list_columns <- sapply(df, function(x) any(sapply(x, is.list)))
+  
+  # Replace infinite values in each column with lists
+  for (col in names(df[list_columns])) {
+    df[[col]] <- lapply(df[[col]], function(x) {
+      if (is.numeric(x)) {
+        x[!is.finite(x)] <- replacement_value
+      }
+      return(x)
+    })
+  }
+  
+  return(df)
+}
+```
+
+```{r}
+# Handle infinite values in each data frame
+breast_cancer_data <- handle_infinite_values(breast_cancer_data)
+breast_cancer_data_comb <- handle_infinite_values(breast_cancer_data_comb)
+breast_cancer_data_new_features <- handle_infinite_values(breast_cancer_data_new_features)
+
+```
+
+```{r}
+# Assuming you have the breast_cancer_data_new_features data
+# Assuming you have the 'diagnosis' column in your original data
+
+library(ggplot2)
+
+# Define numeric columns (replace with placeholder names if actual names are unknown)
+numeric_columns <- c("texture_mean", "texture_se", "texture_worst", "concavity_worst", 
+                     "concave_points_worst", "fractal_dimension_mean", "fractal_dimension_se", 
+                     "fractal_dimension_worst", "symmetry_mean", "symmetry_se", "symmetry_worst", 
+                     "radius_mean", "radius_se", "perimeter_mean", "area_mean")  # Replace with actual column names if available
+
+# Set the range of k values
+k_values <- 2:10
+
+# Perform k-means clustering for each k
+cluster_labels_list <- list()
+
+for (k in k_values) {
+  # Run k-means clustering
+  breast_cancer_data_kmeans <- kmeans(breast_cancer_data_new_features[, numeric_columns], centers = 3, iter.max = 1000)
+  
+  # Store cluster labels in the list
+  cluster_labels_list[[as.character(k)]] <- breast_cancer_data_kmeans$cluster
+}
+
+# Merge cluster labels back into the data without creating a list
+breast_cancer_data_new_features$cluster_labels <- cluster_labels_list[[as.character(k)]]  # Choose a specific k value for labeling
+
+# Map clusters to original data and analyze majority diagnoses
+for (k in k_values) {
+  # Extract cluster labels for the current k
+  cluster_labels <- breast_cancer_data_new_features$cluster_labels
+  
+  # Find the majority diagnosis in each cluster
+  majority_diagnoses <- sapply(unique(cluster_labels), function(cluster) {
+    indices <- which(cluster_labels == cluster)
+    majority_diagnosis <- names(which.max(table(breast_cancer_data_new_features$diagnosis[indices])))
+    return(majority_diagnosis)
+  })
+  
+  # Print the majority diagnosis for each cluster
+  cat("For k =", k, ":\n")
+  for (cluster in unique(cluster_labels)) {
+    cat("  Cluster:", cluster, " Majority diagnosis:", majority_diagnoses[cluster], "\n")
+  }
+  cat("\n")
+}
+
+```
+
+```{r}
+# Identify numeric columns for handling missing values
+numeric_columns <- sapply(breast_cancer_data_new_features, is.numeric)
+
+# Replace missing values in numeric columns with the mean
+breast_cancer_data_new_features[, numeric_columns] <- lapply(
+  breast_cancer_data_new_features[, numeric_columns],
+  function(x) replace_na(x, mean(x, na.rm = TRUE))
+)
+
+# Verify successful imputation
+if (any(is.na(breast_cancer_data_new_features))) {
+  stop("Missing values still present in the data. Please double-check.")
+}
+```
+
+```{r}
+# WCCS calculation and elbow plot with extended k-range (by 2s)
+
+square_distances <- function(data, centers) {
+  rowSums((data - centers)^2)
+}
+
+k_range <- 2:20 # Extended k-range from 2 to 20 (counting by 2s)
+
+wss_values <- sapply(k_range, function(k) {
+  model <- kmeans(breast_cancer_data_new_features[, numeric_columns], centers = k, iter.max = 1000)
+  sum(square_distances(breast_cancer_data_new_features[, numeric_columns], model$centers))
+})
+
+plot(k_range, wss_values, type = "b", main = "Elbow Method for Breast Cancer Data (Extended Range by 2s)",
+     xlab = "Number of clusters (k)", ylab = "Within-cluster Sum of Squares (WCSS)")
+abline(lm(k_range ~ wss_values), col = "red", lty = 2)
+
+
+```
+
+```{r}
+# Assuming you have the breast_cancer_data_new_features data
+# Assuming you have the 'diagnosis' column in your original data
+# Assuming you have the 'cluster_labels' variable
+# Investigating Shape and Complexity in predicting a Benign or Malignant Tumor based on the Radius Ratio and Perimeter Area Ratio:
+
+# Choose the optimal k value based on silhouette scores
+optimal_k <- 3  # Adjust this based on Elbow Method Analysis
+
+# Run k-means clustering with the optimal k value
+breast_cancer_data_kmeans <- kmeans(breast_cancer_data_new_features[, c("radius_ratio", "perimeter_area_ratio")], centers = optimal_k, iter.max = 1000)
+
+# Add cluster labels to the original data with a renamed column
+original_data_with_clusters <- cbind(breast_cancer_data_new_features, cluster_labels_renamed = as.factor(breast_cancer_data_kmeans$cluster))
+
+# Visualize clusters using two features
+library(ggplot2)
+ggplot(original_data_with_clusters, aes(x = radius_ratio, y = perimeter_area_ratio, color = as.factor(cluster_labels_renamed), shape = diagnosis)) +
+  geom_point() +
+  labs(title = paste("K-Means Clustering (k =", optimal_k, ")"),
+       x = "Radius Ratio",
+       y = "Perimeter Area Ratio",
+       color = "Cluster",
+       shape = "Diagnosis") +
+  theme_minimal()
+
+# Cluster Characteristics Summary
+cluster_summary <- aggregate(breast_cancer_data_new_features[, c("radius_ratio", "perimeter_area_ratio")], by = list(cluster = breast_cancer_data_kmeans$cluster), FUN = mean)
+
+# Print Cluster Characteristics
+print("Cluster Characteristics Summary:")
+print(cluster_summary)
+
+# Explore Misclassified Cases
+misclassified_data <- original_data_with_clusters[original_data_with_clusters$diagnosis != original_data_with_clusters$cluster_labels_renamed, ]
+print("Misclassified Cases:")
+print(misclassified_data)
+
+# Calculate silhouette score using cluster.stats from fpc package
+library(fpc)
+silhouette_stats <- cluster.stats(dist(breast_cancer_data_new_features[, c("radius_ratio", "perimeter_area_ratio")]), breast_cancer_data_kmeans$cluster)
+
+# Extract silhouette score from the cluster.stats results
+silhouette_avg <- silhouette_stats$avg.silwidth
+print(paste("Silhouette Score:", silhouette_avg))
+
+
+```
+
+```{r}
+# Assuming you have the breast_cancer_data_new_features data
+# Assuming you have the 'diagnosis' column in your original data
+# Assuming you have the 'cluster_labels' variable
+# Investigating Shape and Complexity in predicting a Benign or Malignant Tumor based on the Concavity Ratio and Radius Ratio:
+
+# Choose the optimal k value based on silhouette scores
+optimal_k <- 3  # Adjust this based on Elbow Method Analysis
+
+# Run k-means clustering with the optimal k value
+breast_cancer_data_kmeans <- kmeans(breast_cancer_data_new_features[, c("concavity_ratio", "radius_ratio")], centers = optimal_k, iter.max = 1000)
+
+# Add cluster labels to the original data with a renamed column
+original_data_with_clusters <- cbind(breast_cancer_data_new_features, cluster_labels_renamed = as.factor(breast_cancer_data_kmeans$cluster))
+
+# Visualize clusters using two features
+library(ggplot2)
+ggplot(original_data_with_clusters, aes(x = concavity_ratio, y = radius_ratio, color = as.factor(cluster_labels_renamed), shape = diagnosis)) +
+  geom_point() +
+  labs(title = paste("K-Means Clustering (k =", optimal_k, ")"),
+       x = "Concavity Ratio",
+       y = "Radius Ratio",
+       color = "Cluster",
+       shape = "Diagnosis") +
+  theme_minimal()
+
+# Cluster Characteristics Summary
+cluster_summary <- aggregate(breast_cancer_data_new_features[, c("concavity_ratio", "radius_ratio")], by = list(cluster = breast_cancer_data_kmeans$cluster), FUN = mean)
+
+# Print Cluster Characteristics
+print("Cluster Characteristics Summary:")
+print(cluster_summary)
+
+# Explore Misclassified Cases
+misclassified_data <- original_data_with_clusters[original_data_with_clusters$diagnosis != original_data_with_clusters$cluster_labels_renamed, ]
+print("Misclassified Cases:")
+print(misclassified_data)
+
+# Calculate silhouette score using cluster.stats from fpc package
+library(fpc)
+silhouette_stats <- cluster.stats(dist(breast_cancer_data_new_features[, c("concavity_ratio", "radius_ratio")]), breast_cancer_data_kmeans$cluster)
+
+# Extract silhouette score from the cluster.stats results
+silhouette_avg <- silhouette_stats$avg.silwidth
+print(paste("Silhouette Score:", silhouette_avg))
+
+```
+
+```{r}
+#Investigating Texture and Symmetry in predicting a Benign or Malignant Tumor based on the Texture Worst Mean Ratio and Texture Mean SE Ratio:
+# Assuming you have the breast_cancer_data_new_features data
+# Assuming you have the 'diagnosis' column in your original data
+# Assuming you have the 'cluster_labels' variable
+
+# Choose the optimal k value based on silhouette scores
+optimal_k <- 3  # Adjust this based on your Elbow Method Analysis
+
+# Run k-means clustering with the optimal k value
+breast_cancer_data_kmeans <- kmeans(breast_cancer_data_new_features[, c("texture_worst_mean_ratio", "texture_mean_se_ratio")], centers = optimal_k, iter.max = 1000)
+
+# Add cluster labels to the original data with a renamed column
+original_data_with_clusters <- cbind(
+  breast_cancer_data_new_features,
+  cluster_labels_renamed = as.factor(breast_cancer_data_kmeans$cluster)
+)
+
+# Visualize clusters using two features
+library(ggplot2)
+ggplot(original_data_with_clusters, aes(
+  x = texture_worst_mean_ratio,
+  y = texture_mean_se_ratio,
+  color = as.factor(cluster_labels_renamed),
+  shape = diagnosis
+)) +
+  geom_point() +
+  labs(
+    title = paste("K-Means Clustering (k =", optimal_k, ")"),
+    x = "Texture Worst Mean Ratio",
+    y = "Texture Mean SE Ratio",
+    color = "Cluster",
+    shape = "Diagnosis"
+  ) +
+  theme_minimal()
+
+# Cluster Characteristics Summary
+cluster_summary <- aggregate(breast_cancer_data_new_features[, c("texture_worst_mean_ratio", "texture_mean_se_ratio")], by = list(cluster = breast_cancer_data_kmeans$cluster), FUN = mean)
+
+# Print Cluster Characteristics
+print("Cluster Characteristics Summary:")
+print(cluster_summary)
+
+# Explore Misclassified Cases
+misclassified_data <- original_data_with_clusters[original_data_with_clusters$diagnosis != original_data_with_clusters$cluster_labels_renamed, ]
+print("Misclassified Cases:")
+print(misclassified_data)
+
+# Calculate silhouette score using cluster.stats from fpc package
+library(fpc)
+silhouette_stats <- cluster.stats(dist(breast_cancer_data_new_features[, c("texture_worst_mean_ratio", "texture_mean_se_ratio")]), breast_cancer_data_kmeans$cluster)
+
+# Extract silhouette score from the cluster.stats results
+silhouette_avg <- silhouette_stats$avg.silwidth
+print(paste("Silhouette Score:", silhouette_avg))
+
+
+```
+
+```{r}
+# Assuming you have loaded the required libraries and the data
+# Make sure 'diagnosis' is a factor variable
+breast_cancer_data_comb$diagnosis <- as.factor(breast_cancer_data_comb$diagnosis...2)
+
+# Set seed for reproducibility
+set.seed(123)
+
+# Generate random indices for the training set (70% of the data)
+train_indices <- sample(nrow(breast_cancer_data_comb), 0.7 * nrow(breast_cancer_data_comb))
+
+# Create the training set
+train_data <- breast_cancer_data_comb[train_indices, ]
+
+# Create the testing set (remaining data)
+test_data <- breast_cancer_data_comb[-train_indices, ]
+
+#Recompute Formula and Train Decision Model
+formula <- as.formula("diagnosis ~ radius_ratio + perimeter_area_ratio + concavity_ratio + texture_worst_mean_ratio + texture_mean_se_ratio")
+
+ctree_model <- ctree(formula, data = train_data)
+
+
+# Train a decision tree model
+ctree_model <- ctree(formula, data = train_data)
+
+# Make predictions on the test data
+predictions_ctree <- predict(ctree_model, newdata = test_data)
+
+# Compute evaluation metrics for Model A (Decision Tree)
+conf_matrix_ctree <- table(test_data$diagnosis, predictions_ctree)
+accuracy_ctree <- sum(diag(conf_matrix_ctree)) / sum(conf_matrix_ctree)
+precision_ctree <- conf_matrix_ctree["M", "M"] / sum(conf_matrix_ctree["M", ])
+recall_ctree <- conf_matrix_ctree["M", "M"] / sum(conf_matrix_ctree[, "M"])
+f1_score_ctree <- 2 * (precision_ctree * recall_ctree) / (precision_ctree + recall_ctree)
+
+# Print the results for Model A
+cat("Model A - Confusion Matrix:\n", conf_matrix_ctree, "\n")
+cat("Model A - Accuracy: ", accuracy_ctree, "\n")
+cat("Model A - Precision: ", precision_ctree, "\n")
+cat("Model A - Recall: ", recall_ctree, "\n")
+cat("Model A - F1-Score: ", f1_score_ctree, "\n")
+
+
+
+```
+
+
